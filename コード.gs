@@ -21,6 +21,7 @@ function onOpen() {
       .addItem('新規成功要素登録', 'add_new_success_element')
       .addItem('成功要素停止', 'stop_success_element')
       .addItem('成功要素テキスト表示', 'show_success_element')
+      .addItem('成長申請用テキスト表示', 'show_result')
       .addSeparator()
       .addItem('使い方', 'help')
       // .addItem('シート番号リセット', 'reset_sheet_number')
@@ -54,6 +55,9 @@ function create_result() {
     return;
   }
 
+  let config_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  let config_range = config_sheet.getRange("A1:I6");
+
   console.log(sheet.getSheetName());
   // "A2:D17"
   let a1notation = "A" + BASE_ROW +":D" + (BASE_ROW + MAX_SUCCESS_ELEMENT - 1);
@@ -82,7 +86,8 @@ function create_result() {
       return [{name: val.name, power: val.power, count: 0, prev: "", available: true}];
     }
 
-    let name_power = val.name + "(" + val.power + ")";
+    // let name_power = val.name + "(" + val.power + ")";
+    let name_power = custom_format_(config_range, val.name, val.power, val.count);
     let nextPower = Math.min(6, val.power + 1);
     let nextCount;
     if (val.count + 1 === 3) {
@@ -312,6 +317,50 @@ function show_success_element() {
     let power = range.getCell(i, 3).getValue();
     let count = range.getCell(i, 4).getValue();
     results.push(custom_format_(config_range, name, power, count));    
+  }
+
+  html.data = results;
+  SpreadsheetApp.getUi().showModalDialog(html.evaluate(), '成功要素のテキスト表示');
+}
+
+function show_result() {
+  let sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+    SpreadsheetApp.getUi().alert('このシートでは実行できません');
+    return;
+  }
+  console.log(sheet.getSheetName());
+
+  let config_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
+  let config_range = config_sheet.getRange("A1:I6");
+
+  let html = HtmlService.createTemplateFromFile('index');
+  
+  let results = [];
+  // a1notation is like "A2:D17"
+  let a1notation = "A" + BASE_ROW +":D" + (BASE_ROW + MAX_SUCCESS_ELEMENT - 1);
+  let range = sheet.getRange(a1notation);
+  let prev = "";
+  for (let i = 1; i <= MAX_SUCCESS_ELEMENT; i++) {
+    let name = range.getCell(i, 2).getDisplayValue();
+    if (name === "") {
+      continue;
+    }
+    let power = range.getCell(i, 3).getValue();
+    let count = range.getCell(i, 4).getValue();
+    let from = range.getCell(i, 2).getNote();
+    if (from !== "" && prev !== from) {
+      // 成長、もしくは分割の一つ目
+      results.push(from);// 成長前、分割前
+      prev = from;
+      results.push("→" + custom_format_(config_range, name, power, count));// 成長後、分割後1
+    } else if (from !== "" && prev === from) {
+      // 分割の二つ目
+      results.push("→" + custom_format_(config_range, name, power, count));// 分割後2
+    } else {
+      // 成長なし
+      results.push(custom_format_(config_range, name, power, count));
+    }
   }
 
   html.data = results;
