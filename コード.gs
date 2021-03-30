@@ -149,14 +149,14 @@ function create_result() {
   let documentProperties = PropertiesService.getDocumentProperties();  
   console.log(documentProperties.getKeys().some((value) => value === DOC_PROP_SHEET_NUMBER));
   let sheetNumber = documentProperties.getKeys().some((value) => value === DOC_PROP_SHEET_NUMBER)
-    ? documentProperties.getProperty('sheetNumber')
+    ? documentProperties.getProperty(DOC_PROP_SHEET_NUMBER)
     : 1; // 初回起動時
   sheetNumber++;
-  documentProperties.setProperty('sheetNumber', sheetNumber);
+  documentProperties.setProperty(DOC_PROP_SHEET_NUMBER, sheetNumber);
 
   copySheet.setName(sheetNumber);
   copySheet.activate();
-  SpreadsheetApp.getActiveSpreadsheet().moveActiveSheet(1);
+  SpreadsheetApp.getActiveSpreadsheet().moveActiveSheet(2);
   let dataRange = copySheet.getDataRange();
   let index = BASE_ROW;
   for (let re in results) {
