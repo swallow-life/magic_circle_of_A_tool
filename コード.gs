@@ -181,6 +181,10 @@ function create_result() {
     inAvailableRange.getCell(inAvailableIndex, 2).setValue(results[re].name);
     inAvailableRange.getCell(inAvailableIndex, 3).setValue(results[re].power);
     inAvailableRange.getCell(inAvailableIndex, 4).setValue(results[re].count);
+    inAvailableRange.getCell(inAvailableIndex, 2).setBackground("grey");
+    inAvailableRange.getCell(inAvailableIndex, 3).setBackground("grey");
+    inAvailableRange.getCell(inAvailableIndex, 4).setBackground("grey");
+
     if (results[re].prev !== "") {
       inAvailableRange.getCell(inAvailableIndex, 2).setNote(results[re].prev);
     }
