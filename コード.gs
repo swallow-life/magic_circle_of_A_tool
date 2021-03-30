@@ -19,6 +19,7 @@ function onOpen() {
       .addItem('成功要素成長', 'create_result')
       .addSeparator()
       .addItem('新規成功要素登録', 'add_new_success_element')
+      .addItem('成功要素停止', 'stop_success_element')
       .addItem('成功要素テキスト表示', 'show_success_element')
       .addSeparator()
       .addItem('使い方', 'help')
@@ -149,14 +150,14 @@ function create_result() {
   let documentProperties = PropertiesService.getDocumentProperties();  
   console.log(documentProperties.getKeys().some((value) => value === DOC_PROP_SHEET_NUMBER));
   let sheetNumber = documentProperties.getKeys().some((value) => value === DOC_PROP_SHEET_NUMBER)
-    ? documentProperties.getProperty('sheetNumber')
+    ? documentProperties.getProperty(DOC_PROP_SHEET_NUMBER)
     : 1; // 初回起動時
   sheetNumber++;
-  documentProperties.setProperty('sheetNumber', sheetNumber);
+  documentProperties.setProperty(DOC_PROP_SHEET_NUMBER, sheetNumber);
 
   copySheet.setName(sheetNumber);
   copySheet.activate();
-  SpreadsheetApp.getActiveSpreadsheet().moveActiveSheet(1);
+  SpreadsheetApp.getActiveSpreadsheet().moveActiveSheet(2);
   let dataRange = copySheet.getDataRange();
   let index = BASE_ROW;
   for (let re in results) {
@@ -180,6 +181,10 @@ function create_result() {
     inAvailableRange.getCell(inAvailableIndex, 2).setValue(results[re].name);
     inAvailableRange.getCell(inAvailableIndex, 3).setValue(results[re].power);
     inAvailableRange.getCell(inAvailableIndex, 4).setValue(results[re].count);
+    inAvailableRange.getCell(inAvailableIndex, 2).setBackground("grey");
+    inAvailableRange.getCell(inAvailableIndex, 3).setBackground("grey");
+    inAvailableRange.getCell(inAvailableIndex, 4).setBackground("grey");
+
     if (results[re].prev !== "") {
       inAvailableRange.getCell(inAvailableIndex, 2).setNote(results[re].prev);
     }
@@ -220,6 +225,66 @@ function add_new_success_element() {
     }
   }
   Browser.msgBox("成功要素の数が最大のため新規成功要素は登録できません");
+}
+
+function stop_success_element() {
+  let sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+    SpreadsheetApp.getUi().alert('このシートでは実行できません');
+    return;
+  }
+
+  let a1notation = "A" + BASE_ROW +":D" + (BASE_ROW + MAX_SUCCESS_ELEMENT - 1);
+  let range = sheet.getRange(a1notation);
+
+  let vals = [];
+  for (let i = 1; i <= MAX_SUCCESS_ELEMENT; i++) {
+    let target = range.getCell(i, 1).getValue();
+    if (target === false) {
+      continue;
+    }
+    range.getCell(i, 1).setValue(false);
+
+    let name = range.getCell(i, 2).getDisplayValue();
+    if (name === "") {
+      continue;
+    }
+    let power = range.getCell(i, 3).getValue();
+    let count = range.getCell(i, 4).getValue();
+    let prev = range.getCell(i, 2).getNote();
+    range.getCell(i, 2).clearContent();
+    range.getCell(i, 3).clearContent();
+    range.getCell(i, 4).clearContent();
+    range.getCell(i, 2).clearNote();
+    vals.push({target: target, name: name, power: power, count: count, prev: prev, available: true})
+  }
+  if (vals.length === 0) {
+    Browser.msgBox("停止したい成功要素を選択してください");
+    return;
+  }
+
+  let inAvailableRange = sheet.getRange("A18:D33");
+  let inAvailableIndex = 1;
+  for (let val in vals) {
+    for (; inAvailableIndex <= MAX_SUCCESS_ELEMENT;) {
+      if (inAvailableRange.getCell(inAvailableIndex, 2).getDisplayValue() !== "") {
+        inAvailableIndex++;
+        continue;
+      }
+      inAvailableRange.getCell(inAvailableIndex, 2).setValue(vals[val].name);
+      inAvailableRange.getCell(inAvailableIndex, 3).setValue(vals[val].power);
+      inAvailableRange.getCell(inAvailableIndex, 4).setValue(vals[val].count);
+      inAvailableRange.getCell(inAvailableIndex, 2).setBackground("grey");
+      inAvailableRange.getCell(inAvailableIndex, 3).setBackground("grey");
+      inAvailableRange.getCell(inAvailableIndex, 4).setBackground("grey");
+      if (vals[val].prev !== "") {
+        inAvailableRange.getCell(inAvailableIndex, 2).setNote(vals[val].prev);
+      }
+      inAvailableIndex++;
+      break;
+    }
+  }
+
 }
 
 function show_success_element() {
