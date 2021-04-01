@@ -57,6 +57,7 @@ function create_result() {
 
   let config_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
   let config_range = config_sheet.getRange("A1:I6");
+  let use_dialog = config_range.getCell(12, 1).getValue();
 
   console.log(sheet.getSheetName());
   // "A2:D17"
@@ -99,7 +100,7 @@ function create_result() {
       nextPower--;
       let nextName1
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
-        nextName1 = inputBoxCustum_(name_power + "の成長分割1");
+        nextName1 = use_dialog ? inputBoxCustum_(name_power + "の成長分割1") : '';
         numSuccessElement++;
       } else {
         nextName1 = "（分割時、最大成功要素数を超過のため削除）";
@@ -114,7 +115,7 @@ function create_result() {
       });
       let nextName2
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
-        nextName2 = inputBoxCustum_(name_power + "の成長分割2");
+        nextName2 = use_dialog ? inputBoxCustum_(name_power + "の成長分割2") : '';
         numSuccessElement++;
       } else {
         nextName2 = "（分割時、最大成功要素数を超過のため削除）";
