@@ -5,11 +5,11 @@
   </head>
   <body>
     <table>
-      <? for (let i in data) { ?>
+      <? data.forEach(text => { ?>
         <tr>
-          <td><?= data[i] ?></td>
+          <td><?= text ?></td>
         </tr>
-      <? } ?>
+      <? }) ?>
     </table>
   </body>
 </html>
