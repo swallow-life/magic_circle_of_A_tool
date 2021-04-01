@@ -2,4 +2,4 @@
 
 https://sites.google.com/view/a-maho-tool/ホーム
 
-ver1.1
+ver1.4
