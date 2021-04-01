@@ -140,7 +140,7 @@ function create_result() {
       let nextName;
       let prev;
       if (val.power < 6) {
-        nextName = inputBoxCustum_(name_power + "の成長");
+        nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : '';
         prev = name_power + "からの成長";
       } else {
         // パワー６の場合名前は変わらない
