@@ -1,5 +1,5 @@
 const BASE_ROW = 2;
-const MAX_SUCCESS_ELEMENT = 16;
+const MAX_SUCCESS_ELEMENT = 16; //成功要素登録最大数
 const DOC_PROP_SHEET_NUMBER = "sheetNumber";
 const CONFIG_SHEET_NAME = "設定";
 const NEW_SUCCESS_ELEMENT = "新規成功要素";
@@ -15,6 +15,9 @@ const number_half_wide_map = {
   6: "６",
 }
 
+/**
+ * 起動時実施される初期化関数。
+ */
 function onOpen() {
   SpreadsheetApp.getUi() // Or DocumentApp or SlidesApp or FormApp.
       .createMenu('成功要素管理')
@@ -44,11 +47,17 @@ function debug() {
   // console.log(douji_kadai);
 }
 
+/** 
+ * シート番号の初期化関数。
+ */
 function reset_sheet_number() {
   let documentProperties = PropertiesService.getDocumentProperties();
   documentProperties.deleteProperty(DOC_PROP_SHEET_NUMBER);
 }
 
+/** 
+ * 使い方紹介関数。使い方ダイアログを出す。
+ */
 function help() {
   // let html = HtmlService.createHtmlOutputFromFile('help');
   // html.setWidth(850);
@@ -60,6 +69,10 @@ function help() {
       .setTitle('簡単な使い方'));
 }
 
+/**
+ * 成長処理関数。
+ * 
+ */
 function create_result() {
   let sheet = SpreadsheetApp.getActiveSheet();
   if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
@@ -90,8 +103,8 @@ function create_result() {
   let config = read_config_(config_range);
   let use_dialog = config_range.getCell(12, 1).getValue();
 
-  let numSuccessElement = vals.filter(x => x.available === true).length;
-  let results = vals.flatMap(val => {
+  let numSuccessElement = vals.filter(x => x.available === true).length; //使用した成功要素数
+  let results = vals.flatMap(val => { //使用した成功要素一つずつに対し成長処理を行う
     if (val.target !== true) {
       // 使わなかった成功要素（連続使用回数を0にする）
       return [{name: val.name, power: val.power, count: 0, note: "", available: true}];
@@ -101,7 +114,7 @@ function create_result() {
     let name_power = custom_format_(config, val.name, val.power, val.count);
     let nextPower = Math.min(6, val.power + 1);
     let nextCount;
-    if (val.count + 1 === 3) {
+    if (val.count + 1 === 3) { //連続使用回数が3回で分割処理対象になる
       let dividedArr = [];
       let available1 = true;
       let available2 = true;
@@ -174,7 +187,7 @@ function create_result() {
   copySheet.setName(sheetNumber);
 
   let dataRange = copySheet.getDataRange();
-  results
+  results //成長結果をシートに記述
     .filter(x => x.available === true)
     .forEach((result, i) => {
       let index = i + BASE_ROW;
@@ -217,6 +230,9 @@ function create_result() {
   copySheet.getRange(1, 7).setValue(today.toLocaleString());
 }
 
+/**
+ * 新規成功要素作成関数。
+ */
 function add_new_success_element() {
   let sheet = SpreadsheetApp.getActiveSheet();
   if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
@@ -247,6 +263,10 @@ function add_new_success_element() {
   Browser.msgBox("成功要素の数が最大のため新規成功要素は登録できません");
 }
 
+/**
+ * 成功要素停止関数。
+ * 
+ */
 function stop_success_element() {
   let sheet = SpreadsheetApp.getActiveSheet();
   if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
@@ -320,6 +340,9 @@ function stop_success_element() {
 
 }
 
+/**
+ * 成功要素テキスト表示関数。
+ */
 function show_success_element() {
   let sheet = SpreadsheetApp.getActiveSheet();
   if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
@@ -351,6 +374,10 @@ function show_success_element() {
   SpreadsheetApp.getUi().showModalDialog(evalHtml, '成功要素のテキスト表示');
 }
 
+/**
+ * 成功申請用テキスト出力関数。
+ * 
+ */
 function show_result() {
   let sheet = SpreadsheetApp.getActiveSheet();
   if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
@@ -367,6 +394,8 @@ function show_result() {
   let range = get_data_range_(sheet);
   let prevNote = "";
   for (let i = 1; i <= MAX_SUCCESS_ELEMENT; i++) {
+    let power = range.getCell(i, 3).getValue(); //成功申請用テキスト出力が上手くいっていなかったのを修正。原因は変数宣言の配置ずれ。
+    let count = range.getCell(i, 4).getValue();
     let name = range.getCell(i, 2).getDisplayValue();
     if (name === "") {
       continue;
@@ -377,8 +406,6 @@ function show_result() {
       results.push(custom_format_(config, name, power, count));
       continue;
     }
-    let power = range.getCell(i, 3).getValue();
-    let count = range.getCell(i, 4).getValue();
     if (prevNote !== note) {
       // 成長、もしくは分割の一つ目のテキスト
       results.push(note);// 成長前、分割前
