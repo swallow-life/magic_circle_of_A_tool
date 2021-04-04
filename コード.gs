@@ -371,14 +371,14 @@ function show_result() {
     if (name === "") {
       continue;
     }
+    let power = range.getCell(i, 3).getValue();
+    let count = range.getCell(i, 4).getValue();
     let note = range.getCell(i, 2).getNote();
     if (note === "") {
       // 成長なしのテキスト
       results.push(custom_format_(config, name, power, count));
       continue;
     }
-    let power = range.getCell(i, 3).getValue();
-    let count = range.getCell(i, 4).getValue();
     if (prevNote !== note) {
       // 成長、もしくは分割の一つ目のテキスト
       results.push(note);// 成長前、分割前
