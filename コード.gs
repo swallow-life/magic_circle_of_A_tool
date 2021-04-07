@@ -1,9 +1,13 @@
 const BASE_ROW = 2;
 const MAX_SUCCESS_ELEMENT = 16;
+const LAST_AVAILABLE_ROW = BASE_ROW + MAX_SUCCESS_ELEMENT - 1;
+const LAST_INAVAILABLE_ROW = LAST_AVAILABLE_ROW + 1 + MAX_SUCCESS_ELEMENT - 1;
+
 const DOC_PROP_SHEET_NUMBER = "sheetNumber";
 const CONFIG_SHEET_NAME = "設定";
 const NEW_SUCCESS_ELEMENT = "新規成功要素";
 const MAX_SUCCESS_ELEMENT_EXCEED = "（分割時、最大成功要素数を超過のため削除）";
+const INAVAILABLE_COLOR = "grey";
 
 const number_half_wide_map = {
   0: "０",
@@ -26,7 +30,6 @@ function onOpen() {
       .addItem('成長申請用テキスト表示', 'show_result')
       .addSeparator()
       .addItem('使い方', 'help')
-      // .addItem('シート番号リセット', 'reset_sheet_number')
       .addToUi();
 
   let documentProperties = PropertiesService.getDocumentProperties();  
@@ -37,11 +40,12 @@ function onOpen() {
 }
 
 function debug() {
-  let v = [1,2,3].length;
-  console.log(v);
-  // let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("1");
-  // let douji_kadai = sheet.getRange(1, 7).getValue();
-  // console.log(douji_kadai);
+  const preserve_sheet_names = ["設定", "template"];
+  let activeSpSh = SpreadsheetApp.getActiveSpreadsheet();
+  activeSpSh.getSheets()
+    .filter(x => !preserve_sheet_names.includes(x.getSheetName()))
+    .forEach(x => activeSpSh.deleteSheet(x))
+    ;
 }
 
 function reset_sheet_number() {
@@ -67,25 +71,27 @@ function create_result() {
     return;
   }
 
-  console.log(sheet.getSheetName());
+  let douji_kadai = sheet.getRange(1, 1).getValue();
+
+  let sheet_name = sheet.getSheetName();
+  console.log(sheet_name);
   // "A2:D17"
   let range = get_data_range_(sheet);
 
-  let douji_kadai = sheet.getRange(1, 6).getValue();
-
   // シートから値を取得する
   let vals = [];
-  for (let i = 1; i <= MAX_SUCCESS_ELEMENT; i++) {
-    let target = range.getCell(i, 1).getValue();
-    let name = range.getCell(i, 2).getDisplayValue();
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let target = range.getCell(row, 1).getValue();
+    let name = range.getCell(row, 2).getDisplayValue();
     if (name === "") {
       continue;
     }
-    let power = range.getCell(i, 3).getValue();
-    let count = range.getCell(i, 4).getValue();
+    let power = range.getCell(row, 3).getValue();
+    let count = range.getCell(row, 4).getValue();
     vals.push({target: target, name: name, power: power, count: count, note: "", available: true})
   }
 
+  // 設定シートから各種設定値を取得する
   let config_range = get_config_range_();
   let config = read_config_(config_range);
   let use_dialog = config_range.getCell(12, 1).getValue();
@@ -97,15 +103,18 @@ function create_result() {
       return [{name: val.name, power: val.power, count: 0, note: "", available: true}];
     }
 
-    // let name_power = val.name + "(" + val.power + ")";
     let name_power = custom_format_(config, val.name, val.power, val.count);
-    let nextPower = Math.min(6, val.power + 1);
+    let nextPower;
     let nextCount;
-    if (val.count + 1 === 3) {
+
+    // 通常の成長処理
+    nextPower = Math.min(6, val.power + 1);
+    if (val.count + 1 >= 3) {
+      // 分割処理
       let dividedArr = [];
       let available1 = true;
       let available2 = true;
-      // 分割処理
+
       nextCount = 0;
       nextPower--;
       let nextName1
@@ -177,31 +186,32 @@ function create_result() {
   results
     .filter(x => x.available === true)
     .forEach((result, i) => {
-      let index = i + BASE_ROW;
-      let nameCell = dataRange.getCell(index, 2);
+      let row = i + BASE_ROW;
+      let nameCell = dataRange.getCell(row, 2);
       nameCell.setValue(result.name);
       if (result.note !== "") {
         nameCell.setNote(result.note);
         nameCell.setBackground("lightblue");
       }
-      dataRange.getCell(index, 3).setValue(result.power);
-      dataRange.getCell(index, 4).setValue(result.count);
+      dataRange.getCell(row, 3).setValue(result.power);
+      dataRange.getCell(row, 4).setValue(result.count);
     });
-  let inAvailableRange = copySheet.getRange("A18:D33");
+  let inAvailableA1notation = "A" + (LAST_AVAILABLE_ROW + 1) +":D" + LAST_INAVAILABLE_ROW;
+  let inAvailableRange = copySheet.getRange(inAvailableA1notation);
   results
     .filter(x => x.available === false)
     .forEach((result, i) => {
-      let inAvailableIndex = i + 1;
-      let nameCell = inAvailableRange.getCell(inAvailableIndex, 2);
-      let powerCell = inAvailableRange.getCell(inAvailableIndex, 3);
-      let countCell = inAvailableRange.getCell(inAvailableIndex, 4);
+      let inAvailableRow = i + 1;
+      let nameCell = inAvailableRange.getCell(inAvailableRow, 2);
+      let powerCell = inAvailableRange.getCell(inAvailableRow, 3);
+      let countCell = inAvailableRange.getCell(inAvailableRow, 4);
 
       nameCell.setValue(result.name);
       powerCell.setValue(result.power);
       countCell.setValue(result.count);
-      nameCell.setBackground("grey");
-      powerCell.setBackground("grey");
-      countCell.setBackground("grey");
+      nameCell.setBackground(INAVAILABLE_COLOR);
+      powerCell.setBackground(INAVAILABLE_COLOR);
+      countCell.setBackground(INAVAILABLE_COLOR);
 
       if (result.note !== "") {
         nameCell.setNote(result.note);
@@ -224,23 +234,23 @@ function add_new_success_element() {
     return;
   }
 
-  let config_range = get_config_range_();
-  let use_dialog = config_range.getCell(12, 1).getValue();
+  // let config_range = get_config_range_();
+  let use_dialog = true;//config_range.getCell(12, 1).getValue();
 
   let dataRange = sheet.getDataRange();
-  for (let i = BASE_ROW; i <= BASE_ROW + MAX_SUCCESS_ELEMENT - 1; i++) {
-    let name = dataRange.getCell(i, 2).getDisplayValue();
-    let note = dataRange.getCell(i, 2).getNote();
+  for (let row = BASE_ROW; row <= LAST_AVAILABLE_ROW; row++) {
+    let name = dataRange.getCell(row, 2).getDisplayValue();
+    let note = dataRange.getCell(row, 2).getNote();
     if (note === NEW_SUCCESS_ELEMENT) {
       Browser.msgBox("すでに新規成功要素は登録されています");
       return;
     }
     if (name === "" && note === "") {
       let newName = use_dialog ? inputBoxCustum_("新規成功要素の登録") : '';
-      dataRange.getCell(i, 2).setValue(newName);
-      dataRange.getCell(i, 3).setValue(2);
-      dataRange.getCell(i, 4).setValue(0);
-      dataRange.getCell(i, 2).setNote(NEW_SUCCESS_ELEMENT);
+      dataRange.getCell(row, 2).setValue(newName);
+      dataRange.getCell(row, 3).setValue(2);
+      dataRange.getCell(row, 4).setValue(0);
+      dataRange.getCell(row, 2).setNote(NEW_SUCCESS_ELEMENT);
       return;
     }
   }
@@ -259,21 +269,21 @@ function stop_success_element() {
 
   let stopArr = [];
   let selected = false;
-  for (let i = 1; i <= MAX_SUCCESS_ELEMENT; i++) {
-    let target = range.getCell(i, 1).getValue();
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let target = range.getCell(row, 1).getValue();
     if (target === false) {
       continue;
     }
     selected = true;
-    range.getCell(i, 1).setValue(false);
+    range.getCell(row, 1).setValue(false);
 
-    let nameCell = range.getCell(i, 2);
+    let nameCell = range.getCell(row, 2);
     let name = nameCell.getDisplayValue();
 
-    let powerCell = range.getCell(i, 3);
+    let powerCell = range.getCell(row, 3);
     let power = powerCell.getValue();
 
-    let countCell = range.getCell(i, 4);
+    let countCell = range.getCell(row, 4);
     let count = countCell.getValue();
 
     let note = nameCell.getNote();
@@ -292,28 +302,29 @@ function stop_success_element() {
     return;
   }
 
-  let inAvailableRange = sheet.getRange("A18:D33");
-  let inAvailableIndex = 1;
+  let inAvailableA1notation = "A" + (LAST_AVAILABLE_ROW + 1) +":D" + LAST_INAVAILABLE_ROW;
+  let inAvailableRange = sheet.getRange(inAvailableA1notation);
+  let inAvailableRow = 1;
   stopArr.forEach(stop =>  {
-    for (; inAvailableIndex <= MAX_SUCCESS_ELEMENT;) {
-      let nameCell = inAvailableRange.getCell(inAvailableIndex, 2);
+    for (; inAvailableRow <= MAX_SUCCESS_ELEMENT;) {
+      let nameCell = inAvailableRange.getCell(inAvailableRow, 2);
       if (nameCell.getDisplayValue() !== "") {
-        inAvailableIndex++;
+        inAvailableRow++;
         continue;
       }
-      let powerCell = inAvailableRange.getCell(inAvailableIndex, 3);
-      let countCell = inAvailableRange.getCell(inAvailableIndex, 4);
+      let powerCell = inAvailableRange.getCell(inAvailableRow, 3);
+      let countCell = inAvailableRange.getCell(inAvailableRow, 4);
 
       nameCell.setValue(stop.name);
       powerCell.setValue(stop.power);
       countCell.setValue(stop.count);
-      nameCell.setBackground("grey");
-      powerCell.setBackground("grey");
-      countCell.setBackground("grey");
+      nameCell.setBackground(INAVAILABLE_COLOR);
+      powerCell.setBackground(INAVAILABLE_COLOR);
+      countCell.setBackground(INAVAILABLE_COLOR);
       if (stop.note !== "") {
         nameCell.setNote(stop.note);
       }
-      inAvailableIndex++;
+      inAvailableRow++;
       break;
     }
   });
@@ -334,13 +345,13 @@ function show_success_element() {
   let results = [];
   // "A2:D17"
   let range = get_data_range_(sheet);
-  for (let i = 1; i <= MAX_SUCCESS_ELEMENT; i++) {
-    let name = range.getCell(i, 2).getDisplayValue();
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let name = range.getCell(row, 2).getDisplayValue();
     if (name === "") {
       continue;
     }
-    let power = range.getCell(i, 3).getValue();
-    let count = range.getCell(i, 4).getValue();
+    let power = range.getCell(row, 3).getValue();
+    let count = range.getCell(row, 4).getValue();
     results.push(custom_format_(config, name, power, count));    
   }
 
@@ -366,14 +377,14 @@ function show_result() {
   // "A2:D17"
   let range = get_data_range_(sheet);
   let prevNote = "";
-  for (let i = 1; i <= MAX_SUCCESS_ELEMENT; i++) {
-    let name = range.getCell(i, 2).getDisplayValue();
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let name = range.getCell(row, 2).getDisplayValue();
     if (name === "") {
       continue;
     }
-    let power = range.getCell(i, 3).getValue();
-    let count = range.getCell(i, 4).getValue();
-    let note = range.getCell(i, 2).getNote();
+    let power = range.getCell(row, 3).getValue();
+    let count = range.getCell(row, 4).getValue();
+    let note = range.getCell(row, 2).getNote();
     if (note === "") {
       // 成長なしのテキスト
       results.push(custom_format_(config, name, power, count));
@@ -408,7 +419,7 @@ function inputBoxCustum_(guideMessage) {
 
 function get_data_range_(sheet) {
   // "A2:D17"
-  let a1notation = "A" + BASE_ROW +":D" + (BASE_ROW + MAX_SUCCESS_ELEMENT - 1);
+  let a1notation = "A" + BASE_ROW +":D" + LAST_AVAILABLE_ROW;
   return sheet.getRange(a1notation);
 }
 
