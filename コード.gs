@@ -62,6 +62,37 @@ function debug() {
     ;
 }
 
+function init() {
+  delete_data_sheets();
+  create_first_sheet();
+  reset_sheet_number();
+}
+
+function delete_data_sheets() {
+  const preserve_sheet_names = ["設定", "template"];
+  let active = SpreadsheetApp.getActiveSpreadsheet();
+  active.getSheets()
+    .filter(x => !preserve_sheet_names.includes(x.getSheetName()))
+    .forEach(x => active.deleteSheet(x))
+  ;
+}
+
+function create_first_sheet() {
+  let template = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("template");
+  let copySheet = template.copyTo(SpreadsheetApp.getActiveSpreadsheet());
+  copySheet.setName("1");
+  copySheet.activate();
+  SpreadsheetApp.getActiveSpreadsheet().moveActiveSheet(2);
+  let range = copySheet.getDataRange();
+  range.getCell(4, 2).setValue("（初期成功要素を入力してください）");
+  range.getCell(4, 3).setValue(6);
+  range.getCell(4, 4).setValue(0);
+  range.getCell(5, 2).setValue("（初期成功要素を入力してください）");
+  range.getCell(5, 3).setValue(6);
+  range.getCell(5, 4).setValue(0);
+  reset_sheet_number();
+}
+
 function reset_sheet_number() {
   let documentProperties = PropertiesService.getDocumentProperties();
   documentProperties.deleteProperty(DOC_PROP_SHEET_NUMBER);
