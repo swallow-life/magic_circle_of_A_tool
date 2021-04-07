@@ -1,4 +1,4 @@
-const BASE_ROW = 2;
+const BASE_ROW = 4;
 const MAX_SUCCESS_ELEMENT = 16;
 const LAST_AVAILABLE_ROW = BASE_ROW + MAX_SUCCESS_ELEMENT - 1;
 const LAST_INAVAILABLE_ROW = LAST_AVAILABLE_ROW + 1 + MAX_SUCCESS_ELEMENT - 1;
@@ -10,13 +10,27 @@ const MAX_SUCCESS_ELEMENT_EXCEED = "（分割時、最大成功要素数を超�
 const INAVAILABLE_COLOR = "grey";
 
 const number_half_wide_map = {
-  0: "０",
-  1: "１",
-  2: "２",
-  3: "３",
-  4: "４",
-  5: "５",
-  6: "６",
+  0:  "０",
+  1:  "１",
+  2:  "２",
+  3:  "３",
+  4:  "４",
+  5:  "５",
+  6:  "６",
+  7:  "７",
+  8:  "８",
+  9:  "９",
+  10: "１０",
+  11: "１１",
+  12: "１２",
+  13: "１３",
+  14: "１４",
+  15: "１５",
+  16: "１６",
+  17: "１７",
+  18: "１８",
+  19: "１９",
+  20: "２０",
 }
 
 function onOpen() {
@@ -72,10 +86,11 @@ function create_result() {
   }
 
   let douji_kadai = sheet.getRange(1, 1).getValue();
+  let genkai_toppa = sheet.getRange(2, 1).getValue();
 
   let sheet_name = sheet.getSheetName();
   console.log(sheet_name);
-  // "A2:D17"
+  // "A4:D19"
   let range = get_data_range_(sheet);
 
   // シートから値を取得する
@@ -97,6 +112,11 @@ function create_result() {
   let use_dialog = config_range.getCell(12, 1).getValue();
 
   let numSuccessElement = vals.filter(x => x.available === true).length;
+  if (genkai_toppa === true && numSuccessElement < MAX_SUCCESS_ELEMENT) {
+    Browser.msgBox("成功要素の保有数が１６個に満たないため限界突破は適用されません");
+    genkai_toppa = false;
+  }
+
   let results = vals.flatMap(val => {
     if (val.target !== true) {
       // 使わなかった成功要素（連続使用回数を0にする）
@@ -106,6 +126,23 @@ function create_result() {
     let name_power = custom_format_(config, val.name, val.power, val.count);
     let nextPower;
     let nextCount;
+    // 限界突破の成長処理
+    if (genkai_toppa === true) {
+      nextCount = val.count + 1;
+      // 同時提出の場合は連続使用回数をリセットする
+      if (douji_kadai === true) {
+        nextCount = 0;
+      }
+      nextPower = val.power;
+      let note = "";
+      if (val.count + 1 === 20) {
+        // 二〇回連続で使用される成功要素はパワーを＋１する
+        nextCount = 0;
+        nextPower = Math.min(20, val.power + 1);
+        note = name_power + "からの成長（限界突破）";
+      }
+      return [{name: val.name, power: nextPower, count: nextCount, note: note, available: true}];
+    }
 
     // 通常の成長処理
     nextPower = Math.min(6, val.power + 1);
@@ -221,10 +258,12 @@ function create_result() {
   copySheet.activate();
   SpreadsheetApp.getActiveSpreadsheet().moveActiveSheet(2);
 
+  copySheet.getRange(2, 1).setValue(genkai_toppa);
   let today = new Date();
   // アメリカ東海岸時間-4から日本時間+9に変換するので+13
   today.setHours(today.getHours() + 13);
-  copySheet.getRange(1, 7).setValue(today.toLocaleString());
+  copySheet.getRange(1, 4).setValue(today.toLocaleString());
+  copySheet.getRange(2, 4).setValue(sheet_name);
 }
 
 function add_new_success_element() {
@@ -264,7 +303,7 @@ function stop_success_element() {
     return;
   }
 
-  // "A2:D17"
+  // "A4:D19"
   let range = get_data_range_(sheet);
 
   let stopArr = [];
@@ -418,7 +457,7 @@ function inputBoxCustum_(guideMessage) {
 }
 
 function get_data_range_(sheet) {
-  // "A2:D17"
+  // "A4:D19"
   let a1notation = "A" + BASE_ROW +":D" + LAST_AVAILABLE_ROW;
   return sheet.getRange(a1notation);
 }
