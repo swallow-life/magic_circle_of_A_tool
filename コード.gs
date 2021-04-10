@@ -40,8 +40,13 @@ function onOpen() {
       .addSeparator()
       .addItem('新規成功要素登録', 'add_new_success_element')
       .addItem('成功要素停止', 'stop_success_element')
+      .addSeparator()
       .addItem('キャラクターシート用テキスト表示', 'show_success_element')
+      .addItem('統制判定提出用テキスト表示', 'show_target_success_element')
       .addItem('成長申請用テキスト表示', 'show_result')
+      .addSeparator()
+      .addItem('対象チェックボックス全チェック', 'target_all_check')
+      .addItem('対象チェックボックスリセット', 'target_reset')
       .addSeparator()
       .addItem('使い方', 'help')
       .addToUi();
@@ -99,14 +104,39 @@ function reset_sheet_number() {
 }
 
 function help() {
-  // let html = HtmlService.createHtmlOutputFromFile('help');
-  // html.setWidth(850);
-  // html.setHeight(500);
-  // SpreadsheetApp.getUi().showModalDialog(html, '簡単な使い方');
-
   SpreadsheetApp.getUi() // Or DocumentApp or SlidesApp or FormApp.
       .showSidebar(HtmlService.createHtmlOutputFromFile('help')
       .setTitle('簡単な使い方'));
+}
+
+function target_all_check() {
+  let sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+    SpreadsheetApp.getUi().alert('このシートでは実行できません');
+    return;
+  }
+
+  let range = get_data_range_(sheet);
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let name = range.getCell(row, 2).getDisplayValue();
+    if (name === "") {
+      continue;
+    }
+    range.getCell(row, 1).setValue(true);
+  }
+}
+
+function target_reset() {
+  let sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+    SpreadsheetApp.getUi().alert('このシートでは実行できません');
+    return;
+  }
+
+  let range = get_data_range_(sheet);
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    range.getCell(row, 1).setValue(false);
+  }
 }
 
 function create_result() {
@@ -399,6 +429,42 @@ function stop_success_element() {
     }
   });
 
+}
+
+function show_target_success_element() {
+  let sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+    SpreadsheetApp.getUi().alert('このシートでは実行できません');
+    return;
+  }
+  console.log(sheet.getSheetName());
+
+  let config_range = get_config_range_();
+  let config = read_config_(config_range);
+
+  let results = [];
+  // "A2:D17"
+  let range = get_data_range_(sheet);
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let target = range.getCell(row, 1).getValue();
+    if (target === false) {
+      continue;
+    }
+
+    let name = range.getCell(row, 2).getDisplayValue();
+    if (name === "") {
+      continue;
+    }
+    let power = range.getCell(row, 3).getValue();
+    let count = range.getCell(row, 4).getValue();
+    results.push(custom_format_(config, name, power, count));    
+  }
+
+  let html = HtmlService.createTemplateFromFile('index');
+  html.data = results;
+  let evalHtml = html.evaluate();
+  evalHtml.setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(evalHtml, '統制判定用のテキスト表示');
 }
 
 function show_success_element() {
