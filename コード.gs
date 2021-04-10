@@ -215,6 +215,7 @@ function create_result() {
 
       nextCount = 0;
       nextPower--;
+      numSuccessElement--;
       let nextName1
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
         nextName1 = use_dialog ? inputBoxCustum_(name_power + "の成長分割1") : '';
@@ -245,7 +246,6 @@ function create_result() {
         note: name_power + "からの成長分割",
         available: available2
       });
-      numSuccessElement--;
       return dividedArr;
     } else {
       // 成長処理
