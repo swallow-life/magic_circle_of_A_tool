@@ -146,8 +146,14 @@ function create_result() {
     return;
   }
 
+  // 設定シートから各種設定値を取得する
+  let config_range = get_config_range_();
+  let config = read_config_(config_range);
+  let use_dialog = config_range.getCell(12, 1).getValue();
+
   let douji_kadai = sheet.getRange(1, 1).getValue();
   let genkai_toppa = sheet.getRange(2, 1).getValue();
+  let kenshoku = config_range.getCell(14, 1).getValue();
 
   let sheet_name = sheet.getSheetName();
   console.log(sheet_name);
@@ -163,32 +169,27 @@ function create_result() {
       continue;
     }
     let power = range.getCell(row, 3).getValue();
+    let power_count = "";
+    if (kenshoku === true) {
+      power_count = range.getCell(row, 3).getNote();
+    }
     let count = range.getCell(row, 4).getValue();
-    vals.push({target: target, name: name, power: power, count: count, note: "", available: true})
+    vals.push({target: target, name: name, power: power, count: count, note: "", available: true, power_count: power_count})
   }
-
-  // 設定シートから各種設定値を取得する
-  let config_range = get_config_range_();
-  let config = read_config_(config_range);
-  let use_dialog = config_range.getCell(12, 1).getValue();
 
   let numSuccessElement = vals.filter(x => x.available === true).length;
-  if (genkai_toppa === true && numSuccessElement < MAX_SUCCESS_ELEMENT) {
-    Browser.msgBox("成功要素の保有数が１６個に満たないため限界突破は適用されません");
-    genkai_toppa = false;
-  }
 
   let results = vals.flatMap(val => {
     if (val.target !== true) {
       // 使わなかった成功要素（連続使用回数を0にする）
-      return [{name: val.name, power: val.power, count: 0, note: "", available: true}];
+      return [{name: val.name, power: val.power, count: 0, note: "", available: true, power_count: val.power_count}];
     }
 
     let name_power = custom_format_(config, val.name, val.power, val.count);
     let nextPower;
     let nextCount;
     // 限界突破の成長処理
-    if (genkai_toppa === true) {
+    if (genkai_toppa === true && numSuccessElement === MAX_SUCCESS_ELEMENT) {
       nextCount = val.count + 1;
       // 同時提出の場合は連続使用回数をリセットする
       if (douji_kadai === true) {
@@ -205,9 +206,24 @@ function create_result() {
       return [{name: val.name, power: nextPower, count: nextCount, note: note, available: true}];
     }
 
-    // 通常の成長処理
-    nextPower = Math.min(6, val.power + 1);
-    if (val.count + 1 >= 3) {
+    let maxCount;
+    let nextPowerCount = "";
+    if (kenshoku === true) {
+      // 兼職の成長処理
+      if (val.power_count === "1") {
+        nextPower = Math.min(6, val.power + 1);
+        nextPowerCount = "";
+      } else {
+        nextPower = val.power;
+        nextPowerCount = "1";
+      }
+      maxCount = 6;
+    } else {
+      // 通常の成長処理
+      nextPower = Math.min(6, val.power + 1);
+      maxCount = 3;
+    }
+    if (val.count + 1 >= maxCount) {
       // 分割処理
       let dividedArr = [];
       let available1 = true;
@@ -229,7 +245,8 @@ function create_result() {
         power: nextPower,
         count: nextCount,
         note: name_power + "からの成長分割",
-        available: available1
+        available: available1,
+        power_count: "",
       });
       let nextName2
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
@@ -244,7 +261,8 @@ function create_result() {
         power: nextPower,
         count: nextCount,
         note: name_power + "からの成長分割",
-        available: available2
+        available: available2,
+        power_count: "",
       });
       return dividedArr;
     } else {
@@ -256,15 +274,15 @@ function create_result() {
       }
       let nextName;
       let note;
-      if (val.power < 6) {
+      if (val.power < 6 && (kenshoku === false || val.power_count === "1")) {
         nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : '';
         note = name_power + "からの成長";
       } else {
-        // パワー６の場合、名前は変わらない
+        // パワー６の場合、もしくは兼職で一回目の使用の場合、名前は変わらない
         nextName = val.name;
         note = "";
       }
-      return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true}];
+      return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true, power_count: nextPowerCount}];
     }
   });
   let template = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("template");
@@ -292,6 +310,9 @@ function create_result() {
         nameCell.setBackground("lightblue");
       }
       dataRange.getCell(row, 3).setValue(result.power);
+      if (result.power_count != null && result.power_count === "1") {
+        dataRange.getCell(row, 3).setNote(result.power_count);
+      }
       dataRange.getCell(row, 4).setValue(result.count);
     });
   let inAvailableA1notation = "A" + (LAST_AVAILABLE_ROW + 1) +":D" + LAST_INAVAILABLE_ROW;
@@ -383,19 +404,22 @@ function stop_success_element() {
     let powerCell = range.getCell(row, 3);
     let power = powerCell.getValue();
 
+    let powerCount = powerCell.getNote();
+
     let countCell = range.getCell(row, 4);
     let count = countCell.getValue();
 
     let note = nameCell.getNote();
     nameCell.clearNote();
     powerCell.clearContent();
+    powerCell.clearNote();
     countCell.clearContent();
     nameCell.clearContent();
 
     if (note === NEW_SUCCESS_ELEMENT) {
       continue;
     }
-    stopArr.push({target: target, name: name, power: power, count: count, note: note, available: true})
+    stopArr.push({target: target, name: name, power: power, count: count, note: note, available: true, power_count: powerCount})
   }
   if (selected === false) {
     Browser.msgBox("停止したい成功要素を選択してください");
@@ -417,6 +441,10 @@ function stop_success_element() {
 
       nameCell.setValue(stop.name);
       powerCell.setValue(stop.power);
+      if (stop.power_count != null && stop.power_count === "1") {
+        inAvailableRange.getCell(inAvailableRow, 3).setNote(stop.power_count);
+      }
+
       countCell.setValue(stop.count);
       nameCell.setBackground(INAVAILABLE_COLOR);
       powerCell.setBackground(INAVAILABLE_COLOR);
@@ -429,6 +457,37 @@ function stop_success_element() {
     }
   });
 
+}
+
+function show_success_element() {
+  let sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+    SpreadsheetApp.getUi().alert('このシートでは実行できません');
+    return;
+  }
+  console.log(sheet.getSheetName());
+
+  let config_range = get_config_range_();
+  let config = read_config_(config_range);
+
+  let results = [];
+  // "A2:D17"
+  let range = get_data_range_(sheet);
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let name = range.getCell(row, 2).getDisplayValue();
+    if (name === "") {
+      continue;
+    }
+    let power = range.getCell(row, 3).getValue();
+    let count = range.getCell(row, 4).getValue();
+    results.push(custom_format_(config, name, power, count));    
+  }
+
+  let html = HtmlService.createTemplateFromFile('index');
+  html.data = results;
+  let evalHtml = html.evaluate();
+  evalHtml.setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(evalHtml, '成功要素のテキスト表示');
 }
 
 function show_target_success_element() {
@@ -465,37 +524,6 @@ function show_target_success_element() {
   let evalHtml = html.evaluate();
   evalHtml.setHeight(600);
   SpreadsheetApp.getUi().showModalDialog(evalHtml, '統制判定用のテキスト表示');
-}
-
-function show_success_element() {
-  let sheet = SpreadsheetApp.getActiveSheet();
-  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
-    SpreadsheetApp.getUi().alert('このシートでは実行できません');
-    return;
-  }
-  console.log(sheet.getSheetName());
-
-  let config_range = get_config_range_();
-  let config = read_config_(config_range);
-
-  let results = [];
-  // "A2:D17"
-  let range = get_data_range_(sheet);
-  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
-    let name = range.getCell(row, 2).getDisplayValue();
-    if (name === "") {
-      continue;
-    }
-    let power = range.getCell(row, 3).getValue();
-    let count = range.getCell(row, 4).getValue();
-    results.push(custom_format_(config, name, power, count));    
-  }
-
-  let html = HtmlService.createTemplateFromFile('index');
-  html.data = results;
-  let evalHtml = html.evaluate();
-  evalHtml.setHeight(600);
-  SpreadsheetApp.getUi().showModalDialog(evalHtml, '成功要素のテキスト表示');
 }
 
 function show_result() {
@@ -561,7 +589,7 @@ function get_data_range_(sheet) {
 
 function get_config_range_() {
   let config_sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET_NAME);
-  return config_sheet.getRange("A1:I12");
+  return config_sheet.getRange("A1:I14");
 }
 
 function read_config_(config_range) {
