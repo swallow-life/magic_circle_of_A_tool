@@ -9,6 +9,9 @@ const NEW_SUCCESS_ELEMENT = "新規成功要素";
 const MAX_SUCCESS_ELEMENT_EXCEED = "（分割時、最大成功要素数を超過のため削除）";
 const INAVAILABLE_COLOR = "grey";
 
+const MAX_GENKAI_TOPPA_POWER = 20;
+const MAX_POWER = 6;
+
 const number_half_wide_map = {
   0:  "０",
   1:  "１",
@@ -160,7 +163,7 @@ function create_result() {
   // "A4:D19"
   let range = get_data_range_(sheet);
 
-  // シートから値を取得する
+  // シートから成功要素の各値を取得する
   let vals = [];
   for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
     let target = range.getCell(row, 1).getValue();
@@ -185,42 +188,72 @@ function create_result() {
       return [{name: val.name, power: val.power, count: 0, note: "", available: true, power_count: val.power_count}];
     }
 
-    let name_power = custom_format_(config, val.name, val.power, val.count);
+    const name_power = custom_format_(config, val.name, val.power, val.count);
     let nextPower;
+    let nextPowerCount = "";
     let nextCount;
-    // 限界突破の成長処理
+    let note;
+
+    // 限界突破の成長処理（分割ルールを停止）
     if (genkai_toppa === true && numSuccessElement === MAX_SUCCESS_ELEMENT) {
       nextCount = val.count + 1;
-      // 同時提出の場合は連続使用回数をリセットする
       if (douji_kadai === true) {
+        // 同時提出の場合は連続使用回数をリセットする
         nextCount = 0;
       }
-      nextPower = val.power;
-      let note = "";
-      if (val.count + 1 === 20) {
-        // 二〇回連続で使用される成功要素はパワーを＋１する
-        nextCount = 0;
-        nextPower = Math.min(20, val.power + 1);
-        note = name_power + "からの成長（限界突破）";
+
+      let nextName;
+      if (val.power >= MAX_POWER) {
+        // パワー６以上の場合の処理
+        nextName = val.name;
+        if (val.count + 1 === 20) {
+          // 二〇回連続で使用された成功要素はパワーを＋１する
+          nextPower = power_up_(MAX_GENKAI_TOPPA_POWER, val.power);
+          nextCount = 0;
+          note = name_power + "からの成長（限界突破）";
+        } else {
+          // パワーそのままで連続使用回数のカウントアップのみ
+          nextPower = val.power;
+          note = "";
+        }
+      } else {
+        // パワー５以下の場合の処理
+        if (kenshoku === false || val.power_count === "1") {
+          // 兼職していない場合と兼職で二回目の使用の場合は成長処理を実施する
+          nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : '';
+          nextPower = power_up_(MAX_POWER, val.power);
+          note = name_power + "からの成長";
+        } else {
+          // 兼職で一回目の使用の場合、連続使用回数をカウントアップし、さらにパワーの回数をカウントアップ
+          nextName = val.name;
+          nextPower = val.power;
+          nextPowerCount = "1";
+          note = "";
+        }
       }
-      return [{name: val.name, power: nextPower, count: nextCount, note: note, available: true}];
+
+      return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true, power_count: nextPowerCount}];
     }
 
+    // 限界突破以外の成長処理
     let maxCount;
-    let nextPowerCount = "";
     if (kenshoku === true) {
-      // 兼職の成長処理
+      // 兼職の処理
       if (val.power_count === "1") {
-        nextPower = Math.min(6, val.power + 1);
+        // 二回目の使用でパワーが上がる
+        nextPower = power_up_(MAX_POWER, val.power);
         nextPowerCount = "";
       } else {
+        // 一回目の使用ではパワーそのまま
         nextPower = val.power;
-        nextPowerCount = "1";
+        if (val.power < MAX_POWER) {
+          nextPowerCount = "1";
+        }
       }
       maxCount = 6;
     } else {
-      // 通常の成長処理
-      nextPower = Math.min(6, val.power + 1);
+      // 通常の（兼職でない）処理
+      nextPower = power_up_(MAX_POWER, val.power);
       maxCount = 3;
     }
     if (val.count + 1 >= maxCount) {
@@ -232,6 +265,7 @@ function create_result() {
       nextCount = 0;
       nextPower--;
       numSuccessElement--;
+
       let nextName1
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
         nextName1 = use_dialog ? inputBoxCustum_(name_power + "の成長分割1") : '';
@@ -241,13 +275,9 @@ function create_result() {
         available1 = false;
       }
       dividedArr.push({
-        name: nextName1,
-        power: nextPower,
-        count: nextCount,
-        note: name_power + "からの成長分割",
-        available: available1,
-        power_count: "",
+        name: nextName1, power: nextPower, count: nextCount, note: name_power + "からの成長分割", available: available1, power_count: "",
       });
+
       let nextName2
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
         nextName2 = use_dialog ? inputBoxCustum_(name_power + "の成長分割2") : '';
@@ -257,24 +287,19 @@ function create_result() {
         available2 = false;
       }
       dividedArr.push({
-        name: nextName2,
-        power: nextPower,
-        count: nextCount,
-        note: name_power + "からの成長分割",
-        available: available2,
-        power_count: "",
+        name: nextName2, power: nextPower, count: nextCount, note: name_power + "からの成長分割", available: available2, power_count: "",
       });
+
       return dividedArr;
     } else {
       // 成長処理
       nextCount = val.count + 1;
-      // 同時提出の場合は連続使用回数をリセットする
       if (douji_kadai === true) {
+        // 同時提出の場合は連続使用回数をリセットする
         nextCount = 0;
       }
       let nextName;
-      let note;
-      if (val.power < 6 && (kenshoku === false || val.power_count === "1")) {
+      if (val.power < MAX_POWER && (kenshoku === false || val.power_count === "1")) {
         nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : '';
         note = name_power + "からの成長";
       } else {
@@ -285,6 +310,7 @@ function create_result() {
       return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true, power_count: nextPowerCount}];
     }
   });
+
   let template = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("template");
   let copySheet = template.copyTo(SpreadsheetApp.getActiveSpreadsheet());
 
@@ -315,6 +341,7 @@ function create_result() {
       }
       dataRange.getCell(row, 4).setValue(result.count);
     });
+  // 成功要素を分割した際に最大数を超えた分を扱う
   let inAvailableA1notation = "A" + (LAST_AVAILABLE_ROW + 1) +":D" + LAST_INAVAILABLE_ROW;
   let inAvailableRange = copySheet.getRange(inAvailableA1notation);
   results
@@ -612,4 +639,8 @@ function custom_format_(config, name, power, count) {
     count_str = count === 0 ? "" : `${config.pre_count}${config.symbol_as_count.repeat(count)}${config.post_count}`;
   }
   return `${config.pre}${name}${config.pre_power}${number_half_wide_map[power]}${config.post_power}${count_str}${config.post}`;
+}
+
+function power_up_(max_power, power) {
+  return Math.min(max_power, power + 1);
 }
