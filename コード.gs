@@ -218,6 +218,7 @@ function create_result() {
         }
       } else {
         // パワー５以下の場合の処理
+        nextCount = 0;
         if (kenshoku === false || val.power_count === "1") {
           // 兼職していない場合と兼職で二回目の使用の場合は成長処理を実施する
           nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : '';
