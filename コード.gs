@@ -9,6 +9,8 @@ const NEW_SUCCESS_ELEMENT = "新規成功要素";
 const MAX_SUCCESS_ELEMENT_EXCEED = "（分割時、最大成功要素数を超過のため削除）";
 const INAVAILABLE_COLOR = "grey";
 
+const PRESERVE_SHEET_NAMES = [CONFIG_SHEET_NAME, "template"];
+
 const MAX_GENKAI_TOPPA_POWER = 20;
 const MAX_POWER = 6;
 
@@ -37,19 +39,23 @@ const number_half_wide_map = {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi() // Or DocumentApp or SlidesApp or FormApp.
-      .createMenu('成功要素管理')
+  let ui = SpreadsheetApp.getUi();
+  // Or DocumentApp or SlidesApp or FormApp.
+  ui.createMenu('成功要素管理')
       .addItem('成功要素成長', 'create_result')
       .addSeparator()
       .addItem('新規成功要素登録', 'add_new_success_element')
       .addItem('成功要素停止', 'stop_success_element')
       .addSeparator()
-      .addItem('キャラクターシート用テキスト表示', 'show_success_element')
-      .addItem('統制判定提出用テキスト表示', 'show_target_success_element')
+      .addItem('提出用テキスト表示', 'show_target_success_element')
       .addItem('成長申請用テキスト表示', 'show_result')
       .addSeparator()
       .addItem('対象チェックボックス全チェック', 'target_all_check')
       .addItem('対象チェックボックスリセット', 'target_reset')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('ツール連携')
+          .addItem('キャラクターシート用テキスト表示', 'show_success_element')
+          .addItem('ツール連携書式表示', 'show_other_tool_format'))
       .addSeparator()
       .addItem('使い方', 'help')
       .addToUi();
@@ -62,12 +68,8 @@ function onOpen() {
 }
 
 function debug() {
-  const preserve_sheet_names = ["設定", "template"];
   let activeSpSh = SpreadsheetApp.getActiveSpreadsheet();
-  activeSpSh.getSheets()
-    .filter(x => !preserve_sheet_names.includes(x.getSheetName()))
-    .forEach(x => activeSpSh.deleteSheet(x))
-    ;
+  console.log(PRESERVE_SHEET_NAMES.includes(activeSpSh.getSheetName()))
 }
 
 function init() {
@@ -77,10 +79,9 @@ function init() {
 }
 
 function delete_data_sheets() {
-  const preserve_sheet_names = ["設定", "template"];
   let active = SpreadsheetApp.getActiveSpreadsheet();
   active.getSheets()
-    .filter(x => !preserve_sheet_names.includes(x.getSheetName()))
+    .filter(x => !PRESERVE_SHEET_NAMES.includes(x.getSheetName()))
     .forEach(x => active.deleteSheet(x))
   ;
 }
@@ -144,7 +145,7 @@ function target_reset() {
 
 function create_result() {
   let sheet = SpreadsheetApp.getActiveSheet();
-  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+  if (!isTargetSheet_(sheet)) {
     SpreadsheetApp.getUi().alert('このシートでは実行できません');
     return;
   }
@@ -154,8 +155,8 @@ function create_result() {
   let config = read_config_(config_range);
   let use_dialog = config_range.getCell(12, 1).getValue();
 
-  let douji_kadai = sheet.getRange(1, 1).getValue();
-  let genkai_toppa = sheet.getRange(2, 1).getValue();
+  let douji_kadai = sheet.getRange(1, 2).getValue();
+  let genkai_toppa = sheet.getRange(2, 2).getValue();
   let kenshoku = config_range.getCell(14, 1).getValue();
 
   let sheet_name = sheet.getSheetName();
@@ -177,7 +178,9 @@ function create_result() {
       power_count = range.getCell(row, 3).getNote();
     }
     let count = range.getCell(row, 4).getValue();
-    vals.push({target: target, name: name, power: power, count: count, note: "", available: true, power_count: power_count})
+    let reserved_name1 = range.getCell(row, 6).getValue();
+    let reserved_name2 = range.getCell(row, 7).getValue();
+    vals.push({target: target, name: name, power: power, count: count, note: "", available: true, power_count: power_count, reserved_names: [reserved_name1, reserved_name2]})
   }
 
   let numSuccessElement = vals.filter(x => x.available === true).length;
@@ -185,7 +188,7 @@ function create_result() {
   let results = vals.flatMap(val => {
     if (val.target !== true) {
       // 使わなかった成功要素（連続使用回数を0にする）
-      return [{name: val.name, power: val.power, count: 0, note: "", available: true, power_count: val.power_count}];
+      return [{name: val.name, power: val.power, count: 0, note: "", available: true, power_count: val.power_count, reserved_names: val.reserved_names}];
     }
 
     const name_power = custom_format_(config, val.name, val.power, val.count);
@@ -203,6 +206,7 @@ function create_result() {
       }
 
       let nextName;
+      let reservedNames = ['', ''];
       if (val.power >= MAX_POWER) {
         // パワー６以上の場合の処理
         nextName = val.name;
@@ -218,22 +222,23 @@ function create_result() {
         }
       } else {
         // パワー５以下の場合の処理
-        nextCount = 0;
         if (kenshoku === false || val.power_count === "1") {
           // 兼職していない場合と兼職で二回目の使用の場合は成長処理を実施する
-          nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : '';
+          nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : val.reserved_names[0];
           nextPower = power_up_(MAX_POWER, val.power);
           note = name_power + "からの成長";
+          reservedNames = [val.reserved_names[1], ''];
         } else {
           // 兼職で一回目の使用の場合、連続使用回数をカウントアップし、さらにパワーの回数をカウントアップ
           nextName = val.name;
           nextPower = val.power;
           nextPowerCount = "1";
           note = "";
+          reservedNames = val.reserved_names;
         }
       }
 
-      return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true, power_count: nextPowerCount}];
+      return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true, power_count: nextPowerCount, reserved_names: reservedNames}];
     }
 
     // 限界突破以外の成長処理
@@ -269,26 +274,26 @@ function create_result() {
 
       let nextName1
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
-        nextName1 = use_dialog ? inputBoxCustum_(name_power + "の成長分割1") : '';
+        nextName1 = use_dialog ? inputBoxCustum_(name_power + "の成長分割1") : val.reserved_names[0];
         numSuccessElement++;
       } else {
         nextName1 = MAX_SUCCESS_ELEMENT_EXCEED;
         available1 = false;
       }
       dividedArr.push({
-        name: nextName1, power: nextPower, count: nextCount, note: name_power + "からの成長分割", available: available1, power_count: "",
+        name: nextName1, power: nextPower, count: nextCount, note: name_power + "からの成長分割", available: available1, power_count: "", reserved_names: ['', '']
       });
 
       let nextName2
       if (numSuccessElement < MAX_SUCCESS_ELEMENT) {
-        nextName2 = use_dialog ? inputBoxCustum_(name_power + "の成長分割2") : '';
+        nextName2 = use_dialog ? inputBoxCustum_(name_power + "の成長分割2") : val.reserved_names[1];
         numSuccessElement++;
       } else {
         nextName2 = MAX_SUCCESS_ELEMENT_EXCEED;
         available2 = false;
       }
       dividedArr.push({
-        name: nextName2, power: nextPower, count: nextCount, note: name_power + "からの成長分割", available: available2, power_count: "",
+        name: nextName2, power: nextPower, count: nextCount, note: name_power + "からの成長分割", available: available2, power_count: "", reserved_names: ['', '']
       });
 
       return dividedArr;
@@ -300,15 +305,18 @@ function create_result() {
         nextCount = 0;
       }
       let nextName;
+      let reservedNames;
       if (val.power < MAX_POWER && (kenshoku === false || val.power_count === "1")) {
-        nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : '';
+        nextName = use_dialog ? inputBoxCustum_(name_power + "の成長") : val.reserved_names[0];
         note = name_power + "からの成長";
+        reservedNames = [val.reserved_names[1], ''];
       } else {
         // パワー６の場合、もしくは兼職で一回目の使用の場合、名前は変わらない
         nextName = val.name;
         note = "";
+        reservedNames = val.reserved_names;
       }
-      return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true, power_count: nextPowerCount}];
+      return [{name: nextName, power: nextPower, count: nextCount, note: note, available: true, power_count: nextPowerCount, reserved_names: reservedNames}];
     }
   });
 
@@ -325,11 +333,11 @@ function create_result() {
   documentProperties.setProperty(DOC_PROP_SHEET_NUMBER, sheetNumber);
   copySheet.setName(sheetNumber);
 
-  let dataRange = copySheet.getDataRange();
+  let dataRange = get_data_range_(copySheet);
   results
     .filter(x => x.available === true)
     .forEach((result, i) => {
-      let row = i + BASE_ROW;
+      let row = i + 1;
       let nameCell = dataRange.getCell(row, 2);
       nameCell.setValue(result.name);
       if (result.note !== "") {
@@ -341,9 +349,11 @@ function create_result() {
         dataRange.getCell(row, 3).setNote(result.power_count);
       }
       dataRange.getCell(row, 4).setValue(result.count);
+      dataRange.getCell(row, 6).setValue(result.reserved_names[0]);
+      dataRange.getCell(row, 7).setValue(result.reserved_names[1]);
     });
   // 成功要素を分割した際に最大数を超えた分を扱う
-  let inAvailableA1notation = "A" + (LAST_AVAILABLE_ROW + 1) +":D" + LAST_INAVAILABLE_ROW;
+  let inAvailableA1notation = "B" + (LAST_AVAILABLE_ROW + 1) +":E" + LAST_INAVAILABLE_ROW;
   let inAvailableRange = copySheet.getRange(inAvailableA1notation);
   results
     .filter(x => x.available === false)
@@ -368,17 +378,17 @@ function create_result() {
   copySheet.activate();
   SpreadsheetApp.getActiveSpreadsheet().moveActiveSheet(2);
 
-  copySheet.getRange(2, 1).setValue(genkai_toppa);
+  copySheet.getRange(2, 2).setValue(genkai_toppa);
   let today = new Date();
   // アメリカ東海岸時間-4から日本時間+9に変換するので+13
   today.setHours(today.getHours() + 13);
-  copySheet.getRange(1, 4).setValue(today.toLocaleString());
-  copySheet.getRange(2, 4).setValue(sheet_name);
+  copySheet.getRange(1, 5).setValue(today.toLocaleString());
+  copySheet.getRange(2, 5).setValue(sheet_name);
 }
 
 function add_new_success_element() {
   let sheet = SpreadsheetApp.getActiveSheet();
-  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+  if (!isTargetSheet_(sheet)) {
     SpreadsheetApp.getUi().alert('このシートでは実行できません');
     return;
   }
@@ -408,7 +418,7 @@ function add_new_success_element() {
 
 function stop_success_element() {
   let sheet = SpreadsheetApp.getActiveSheet();
-  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+  if (!isTargetSheet_(sheet)) {
     SpreadsheetApp.getUi().alert('このシートでは実行できません');
     return;
   }
@@ -489,7 +499,7 @@ function stop_success_element() {
 
 function show_success_element() {
   let sheet = SpreadsheetApp.getActiveSheet();
-  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+  if (!isTargetSheet_(sheet)) {
     SpreadsheetApp.getUi().alert('このシートでは実行できません');
     return;
   }
@@ -508,7 +518,7 @@ function show_success_element() {
     }
     let power = range.getCell(row, 3).getValue();
     let count = range.getCell(row, 4).getValue();
-    results.push(custom_format_(config, name, power, count));    
+    results.push(custom_format_(config, name, power, count));      
   }
 
   let html = HtmlService.createTemplateFromFile('index');
@@ -520,7 +530,7 @@ function show_success_element() {
 
 function show_target_success_element() {
   let sheet = SpreadsheetApp.getActiveSheet();
-  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+  if (!isTargetSheet_(sheet)) {
     SpreadsheetApp.getUi().alert('このシートでは実行できません');
     return;
   }
@@ -544,7 +554,8 @@ function show_target_success_element() {
     }
     let power = range.getCell(row, 3).getValue();
     let count = range.getCell(row, 4).getValue();
-    results.push(custom_format_(config, name, power, count));    
+    let reason = range.getCell(row, 5).getValue();
+    results.push(custom_format_(config, name, power, count) + `：${reason}`); 
   }
 
   let html = HtmlService.createTemplateFromFile('index');
@@ -556,7 +567,7 @@ function show_target_success_element() {
 
 function show_result() {
   let sheet = SpreadsheetApp.getActiveSheet();
-  if (sheet.getSheetName() === CONFIG_SHEET_NAME) {
+  if (!isTargetSheet_(sheet)) {
     SpreadsheetApp.getUi().alert('このシートでは実行できません');
     return;
   }
@@ -600,6 +611,37 @@ function show_result() {
   SpreadsheetApp.getUi().showModalDialog(evalHtml, '成長申請用のテキスト表示');
 }
 
+function show_other_tool_format() {
+  let sheet = SpreadsheetApp.getActiveSheet();
+  if (!isTargetSheet_(sheet)) {
+    SpreadsheetApp.getUi().alert('このシートでは実行できません');
+    return;
+  }
+  console.log(sheet.getSheetName());
+
+  let config_range = get_config_range_();
+  let config = read_config_(config_range);
+
+  let results = [];
+  // "A2:D17"
+  let range = get_data_range_(sheet);
+  for (let row = 1; row <= MAX_SUCCESS_ELEMENT; row++) {
+    let name = range.getCell(row, 2).getDisplayValue();
+    if (name === "") {
+      continue;
+    }
+    let power = range.getCell(row, 3).getValue();
+    let count = range.getCell(row, 4).getValue();
+    results.push(other_tool_format_(name, power, count));    
+  }
+
+  let html = HtmlService.createTemplateFromFile('index');
+  html.data = results;
+  let evalHtml = html.evaluate();
+  evalHtml.setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(evalHtml, '成功要素の他ツール書式表示');
+}
+
 // below functions are utilities.
 function inputBoxCustum_(guideMessage) {
   let inputValue = Browser.inputBox(guideMessage);
@@ -611,7 +653,7 @@ function inputBoxCustum_(guideMessage) {
 
 function get_data_range_(sheet) {
   // "A4:D19"
-  let a1notation = "A" + BASE_ROW +":D" + LAST_AVAILABLE_ROW;
+  let a1notation = "B" + BASE_ROW + ":H" + LAST_AVAILABLE_ROW;
   return sheet.getRange(a1notation);
 }
 
@@ -642,6 +684,14 @@ function custom_format_(config, name, power, count) {
   return `${config.pre}${name}${config.pre_power}${number_half_wide_map[power]}${config.post_power}${count_str}${config.post}`;
 }
 
+function other_tool_format_(name, power, count) {
+  return `パワー${number_half_wide_map[power]}：連続${number_half_wide_map[count]}：【${name}】`;
+}
+
 function power_up_(max_power, power) {
   return Math.min(max_power, power + 1);
+}
+
+function isTargetSheet_(sheet) {
+  return !PRESERVE_SHEET_NAMES.includes(sheet.getSheetName());
 }
